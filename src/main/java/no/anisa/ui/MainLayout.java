@@ -13,6 +13,7 @@ import com.vaadin.flow.router.RouterLayout;
 import com.vaadin.flow.theme.lumo.Lumo;
 
 import no.anisa.ui.cpu.CpuSchedulingView;
+import no.anisa.ui.paging.PageReplacementView;
 
 public class MainLayout extends AppLayout implements RouterLayout {
 
@@ -33,6 +34,7 @@ public class MainLayout extends AppLayout implements RouterLayout {
 
         SideNav nav = new SideNav();
         nav.addItem(new SideNavItem("CPU Scheduling", CpuSchedulingView.class, VaadinIcon.CLOCK.create()));
+        nav.addItem(new SideNavItem("Page Replacement", PageReplacementView.class, VaadinIcon.TABLE.create()));
 
         addToDrawer(nav);
     }
