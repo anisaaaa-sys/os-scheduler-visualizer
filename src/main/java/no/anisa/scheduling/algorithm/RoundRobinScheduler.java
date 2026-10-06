@@ -9,7 +9,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
-import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -30,16 +30,17 @@ public class RoundRobinScheduler implements CpuScheduler {
                 .sorted(Comparator.comparingInt(ProcessRecord::getArrivalTime).thenComparing(ProcessRecord::getId))
                 .toList();
 
-        Map<String, Integer> remainingTime = new HashMap<>();
+        // Keyed by record identity, not ID, so processes that share an ID are still tracked separately.
+        Map<ProcessRecord, Integer> remainingTime = new IdentityHashMap<>();
         for (ProcessRecord p : arrivalOrder) {
-            remainingTime.put(p.getId(), p.getBurstTime());
+            remainingTime.put(p, p.getBurstTime());
         }
 
         Deque<ProcessRecord> queue = new ArrayDeque<>();
         List<GanttSlice> gantt = new ArrayList<>();
-        Map<String, Integer> completionTime = new HashMap<>();
+        Map<ProcessRecord, Integer> completionTime = new IdentityHashMap<>();
         int contextSwitches = 0;
-        String previousProcessId = null;
+        ProcessRecord previous = null;
 
         int n = arrivalOrder.size();
         int time = n == 0 ? 0 : arrivalOrder.get(0).getArrivalTime();
@@ -53,26 +54,26 @@ public class RoundRobinScheduler implements CpuScheduler {
         while (!queue.isEmpty()) {
             ProcessRecord current = queue.poll();
 
-            if (previousProcessId != null && !previousProcessId.equals(current.getId())) {
+            if (previous != null && previous != current) {
                 contextSwitches++;
             }
 
-            int runFor = Math.min(timeQuantum, remainingTime.get(current.getId()));
+            int runFor = Math.min(timeQuantum, remainingTime.get(current));
             int start = time;
             time += runFor;
             gantt.add(new GanttSlice(current.getId(), start, time));
-            remainingTime.put(current.getId(), remainingTime.get(current.getId()) - runFor);
-            previousProcessId = current.getId();
+            remainingTime.put(current, remainingTime.get(current) - runFor);
+            previous = current;
 
             while (nextToArriveIndex < n && arrivalOrder.get(nextToArriveIndex).getArrivalTime() <= time) {
                 queue.add(arrivalOrder.get(nextToArriveIndex));
                 nextToArriveIndex++;
             }
 
-            if (remainingTime.get(current.getId()) > 0) {
+            if (remainingTime.get(current) > 0) {
                 queue.add(current);
             } else {
-                completionTime.put(current.getId(), time);
+                completionTime.put(current, time);
             }
 
             if (queue.isEmpty() && nextToArriveIndex < n) {
@@ -90,7 +91,7 @@ public class RoundRobinScheduler implements CpuScheduler {
 
         List<ProcessMetrics> metrics = new ArrayList<>();
         for (ProcessRecord p : arrivalOrder) {
-            int completion = completionTime.get(p.getId());
+            int completion = completionTime.get(p);
             int turnaround = completion - p.getArrivalTime();
             int waiting = turnaround - p.getBurstTime();
             metrics.add(new ProcessMetrics(p.getId(), p.getArrivalTime(), p.getBurstTime(), completion, turnaround, waiting));

@@ -75,10 +75,10 @@ public class PageReplacementView extends VerticalLayout {
         algorithmSelect.setItemLabelGenerator(PageReplacementAlgorithmType::getLabel);
         algorithmSelect.setValue(PageReplacementAlgorithmType.FIFO);
 
-        Button runButton = new Button("Run", event -> runSimulation());
+        Button runButton = new Button("Run", _ -> runSimulation());
         runButton.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
 
-        Button compareButton = new Button("Compare", event -> compareAlgorithms());
+        Button compareButton = new Button("Compare", _ -> compareAlgorithms());
 
         HorizontalLayout controls = new HorizontalLayout(referenceField, framesField, algorithmSelect, runButton, compareButton);
         controls.setAlignItems(FlexComponent.Alignment.BASELINE);

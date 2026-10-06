@@ -9,13 +9,12 @@ import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.sidenav.SideNav;
 import com.vaadin.flow.component.sidenav.SideNavItem;
-import com.vaadin.flow.router.RouterLayout;
 import com.vaadin.flow.theme.lumo.Lumo;
 
 import no.anisa.ui.cpu.CpuSchedulingView;
 import no.anisa.ui.paging.PageReplacementView;
 
-public class MainLayout extends AppLayout implements RouterLayout {
+public class MainLayout extends AppLayout {
 
     private boolean darkMode = false;
 
@@ -28,7 +27,7 @@ public class MainLayout extends AppLayout implements RouterLayout {
         Button darkModeToggle = new Button(VaadinIcon.MOON.create());
         darkModeToggle.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
         darkModeToggle.getElement().setAttribute("aria-label", "Toggle dark mode");
-        darkModeToggle.addClickListener(event -> toggleDarkMode());
+        darkModeToggle.addClickListener(_ -> toggleDarkMode());
 
         addToNavbar(toggle, title, darkModeToggle);
 

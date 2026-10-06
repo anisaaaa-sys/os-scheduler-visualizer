@@ -10,14 +10,15 @@ import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
-import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
+import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.data.binder.Binder;
+import com.vaadin.flow.data.binder.Setter;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouteAlias;
@@ -31,7 +32,10 @@ import no.anisa.scheduling.model.SchedulingResult;
 import no.anisa.ui.MainLayout;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.function.ObjIntConsumer;
 
 @Route(value = "cpu-scheduling", layout = MainLayout.class)
 @RouteAlias(value = "", layout = MainLayout.class)
@@ -67,8 +71,8 @@ public class CpuSchedulingView extends VerticalLayout {
     }
 
     private Component buildToolbar() {
-        Button addButton = new Button("Add process", VaadinIcon.PLUS.create(), event -> addBlankProcess());
-        Button loadExampleButton = new Button("Load example", event -> loadExample());
+        Button addButton = new Button("Add process", VaadinIcon.PLUS.create(), _ -> addBlankProcess());
+        Button loadExampleButton = new Button("Load example", _ -> loadExample());
 
         HorizontalLayout toolbar = new HorizontalLayout(addButton, loadExampleButton);
         toolbar.setSpacing(true);
@@ -93,27 +97,27 @@ public class CpuSchedulingView extends VerticalLayout {
         IntegerField arrivalField = new IntegerField();
         arrivalField.setWidthFull();
         arrivalField.setMin(0);
-        binder.forField(arrivalField).asRequired("Required").bind(ProcessRecord::getArrivalTime, ProcessRecord::setArrivalTime);
+        binder.forField(arrivalField).asRequired("Required").bind(ProcessRecord::getArrivalTime, intSetter(ProcessRecord::setArrivalTime));
         arrivalColumn.setEditorComponent(arrivalField);
 
         Grid.Column<ProcessRecord> burstColumn = processGrid.addColumn(ProcessRecord::getBurstTime).setHeader("Burst time").setAutoWidth(true);
         IntegerField burstField = new IntegerField();
         burstField.setWidthFull();
         burstField.setMin(1);
-        binder.forField(burstField).asRequired("Required").bind(ProcessRecord::getBurstTime, ProcessRecord::setBurstTime);
+        binder.forField(burstField).asRequired("Required").bind(ProcessRecord::getBurstTime, intSetter(ProcessRecord::setBurstTime));
         burstColumn.setEditorComponent(burstField);
 
         Grid.Column<ProcessRecord> priorityColumn = processGrid.addColumn(ProcessRecord::getPriority).setHeader("Priority").setAutoWidth(true);
         IntegerField priorityField = new IntegerField();
         priorityField.setWidthFull();
         priorityField.setMin(1);
-        binder.forField(priorityField).asRequired("Required").bind(ProcessRecord::getPriority, ProcessRecord::setPriority);
+        binder.forField(priorityField).asRequired("Required").bind(ProcessRecord::getPriority, intSetter(ProcessRecord::setPriority));
         priorityColumn.setEditorComponent(priorityField);
 
         processGrid.addComponentColumn(process -> {
             Button deleteButton = new Button(VaadinIcon.TRASH.create());
             deleteButton.addThemeVariants(ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_ERROR);
-            deleteButton.addClickListener(event -> {
+            deleteButton.addClickListener(_ -> {
                 processes.remove(process);
                 processGrid.getDataProvider().refreshAll();
             });
@@ -140,7 +144,7 @@ public class CpuSchedulingView extends VerticalLayout {
         algorithmSelect.addValueChangeListener(event ->
                 quantumField.setVisible(event.getValue() == SchedulingAlgorithmType.ROUND_ROBIN));
 
-        Button runButton = new Button("Run", event -> runSimulation());
+        Button runButton = new Button("Run", _ -> runSimulation());
         runButton.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
 
         HorizontalLayout controls = new HorizontalLayout(algorithmSelect, quantumField, runButton);
@@ -164,8 +168,23 @@ public class CpuSchedulingView extends VerticalLayout {
         return layout;
     }
 
+    /**
+     * Adapts a primitive {@code int} setter for an {@link IntegerField} binding. Bindings are {@code asRequired},
+     * so a cleared field never reaches the bean; the null check only guards against auto-unboxing.
+     */
+    private static Setter<ProcessRecord, Integer> intSetter(ObjIntConsumer<ProcessRecord> setter) {
+        return (process, value) -> {
+            if (value != null) {
+                setter.accept(process, value);
+            }
+        };
+    }
+
     private void addBlankProcess() {
         int nextIndex = processes.size() + 1;
+        while (hasProcessWithId("P" + nextIndex)) {
+            nextIndex++;
+        }
         processes.add(new ProcessRecord("P" + nextIndex, 0, 1, 1));
         processGrid.getDataProvider().refreshAll();
     }
@@ -182,6 +201,16 @@ public class CpuSchedulingView extends VerticalLayout {
             return;
         }
 
+        String duplicateId = findDuplicateId();
+        if (duplicateId != null) {
+            Notification.show("Process IDs must be unique: " + duplicateId + " is used more than once")
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
+            return;
+        }
+        if (algorithmSelect.getValue() == null) {
+            algorithmSelect.setValue(SchedulingAlgorithmType.FCFS);
+        }
+
         SchedulingAlgorithmType type = algorithmSelect.getValue();
         int quantum = quantumField.getValue() == null ? 1 : quantumField.getValue();
 
@@ -192,5 +221,19 @@ public class CpuSchedulingView extends VerticalLayout {
         averagesLabel.setText(String.format(
                 "Average waiting time: %.2f | Average turnaround time: %.2f | Context switches: %d",
                 result.averageWaitingTime(), result.averageTurnaroundTime(), result.contextSwitches()));
+    }
+
+    private boolean hasProcessWithId(String id) {
+        return processes.stream().anyMatch(process -> id.equals(process.getId()));
+    }
+
+    private String findDuplicateId() {
+        Set<String> seen = new HashSet<>();
+        for (ProcessRecord process : processes) {
+            if (!seen.add(process.getId())) {
+                return process.getId();
+            }
+        }
+        return null;
     }
 }
