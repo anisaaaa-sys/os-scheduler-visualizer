@@ -14,6 +14,11 @@ import java.util.List;
  */
 public class PriorityScheduler implements CpuScheduler {
 
+    /** Dispatch order among arrived processes; also the order of the ready queue in the trace. */
+    private static final Comparator<ProcessRecord> DISPATCH_ORDER = Comparator.comparingInt(ProcessRecord::getPriority)
+            .thenComparingInt(ProcessRecord::getArrivalTime)
+            .thenComparing(ProcessRecord::getId);
+
     @Override
     public SchedulingResult schedule(List<ProcessRecord> processes) {
         List<ProcessRecord> remaining = new ArrayList<>(processes);
@@ -22,6 +27,7 @@ public class PriorityScheduler implements CpuScheduler {
         int time = 0;
         int contextSwitches = 0;
         String previousProcessId = null;
+        TraceRecorder trace = new TraceRecorder(processes);
 
         while (!remaining.isEmpty()) {
             final int currentTime = time;
@@ -31,15 +37,14 @@ public class PriorityScheduler implements CpuScheduler {
 
             if (arrived.isEmpty()) {
                 int nextArrival = remaining.stream().mapToInt(ProcessRecord::getArrivalTime).min().orElse(time);
+                trace.recordIdle(time, nextArrival);
                 gantt.add(new GanttSlice(null, time, nextArrival));
                 time = nextArrival;
                 continue;
             }
 
             ProcessRecord next = arrived.stream()
-                    .min(Comparator.comparingInt(ProcessRecord::getPriority)
-                            .thenComparingInt(ProcessRecord::getArrivalTime)
-                            .thenComparing(ProcessRecord::getId))
+                    .min(DISPATCH_ORDER)
                     .orElseThrow();
 
             if (previousProcessId != null && !previousProcessId.equals(next.getId())) {
@@ -49,6 +54,15 @@ public class PriorityScheduler implements CpuScheduler {
             int start = time;
             int end = start + next.getBurstTime();
             gantt.add(new GanttSlice(next.getId(), start, end));
+            for (int t = start; t < end; t++) {
+                final int tick = t;
+                List<ProcessRecord> ready = remaining.stream()
+                        .filter(p -> p != next && p.getArrivalTime() <= tick)
+                        .sorted(DISPATCH_ORDER)
+                        .toList();
+                trace.record(t, next, end - t, ready, TraceRecorder.fullBurst(), null);
+            }
+            trace.complete(next, end);
             time = end;
             previousProcessId = next.getId();
 
@@ -59,6 +73,6 @@ public class PriorityScheduler implements CpuScheduler {
             remaining.remove(next);
         }
 
-        return SchedulingResultFactory.build(gantt, metrics, contextSwitches);
+        return SchedulingResultFactory.build(gantt, metrics, contextSwitches, trace.finish(time));
     }
 }

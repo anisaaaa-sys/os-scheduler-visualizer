@@ -45,6 +45,7 @@ public class RoundRobinScheduler implements CpuScheduler {
         int n = arrivalOrder.size();
         int time = n == 0 ? 0 : arrivalOrder.get(0).getArrivalTime();
         int nextToArriveIndex = 0;
+        TraceRecorder trace = new TraceRecorder(processes);
 
         while (nextToArriveIndex < n && arrivalOrder.get(nextToArriveIndex).getArrivalTime() <= time) {
             queue.add(arrivalOrder.get(nextToArriveIndex));
@@ -60,6 +61,18 @@ public class RoundRobinScheduler implements CpuScheduler {
 
             int runFor = Math.min(timeQuantum, remainingTime.get(current));
             int start = time;
+
+            // The queue only absorbs arrivals after the slice, so add those arriving mid-slice for the trace.
+            boolean preempts = previous != null && previous != current && remainingTime.get(previous) > 0;
+            for (int t = start; t < start + runFor; t++) {
+                List<ProcessRecord> ready = new ArrayList<>(queue);
+                for (int i = nextToArriveIndex; i < n && arrivalOrder.get(i).getArrivalTime() <= t; i++) {
+                    ready.add(arrivalOrder.get(i));
+                }
+                trace.record(t, current, remainingTime.get(current) - (t - start), ready, remainingTime::get,
+                        t == start && preempts ? previous : null);
+            }
+
             time += runFor;
             gantt.add(new GanttSlice(current.getId(), start, time));
             remainingTime.put(current, remainingTime.get(current) - runFor);
@@ -74,11 +87,13 @@ public class RoundRobinScheduler implements CpuScheduler {
                 queue.add(current);
             } else {
                 completionTime.put(current, time);
+                trace.complete(current, time);
             }
 
             if (queue.isEmpty() && nextToArriveIndex < n) {
                 int nextArrival = arrivalOrder.get(nextToArriveIndex).getArrivalTime();
                 if (nextArrival > time) {
+                    trace.recordIdle(time, nextArrival);
                     gantt.add(new GanttSlice(null, time, nextArrival));
                     time = nextArrival;
                 }
@@ -97,6 +112,6 @@ public class RoundRobinScheduler implements CpuScheduler {
             metrics.add(new ProcessMetrics(p.getId(), p.getArrivalTime(), p.getBurstTime(), completion, turnaround, waiting));
         }
 
-        return SchedulingResultFactory.build(gantt, metrics, contextSwitches);
+        return SchedulingResultFactory.build(gantt, metrics, contextSwitches, trace.finish(time));
     }
 }

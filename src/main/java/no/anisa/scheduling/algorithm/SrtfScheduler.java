@@ -31,14 +31,16 @@ public class SrtfScheduler implements CpuScheduler {
         ProcessRecord previous = null;
         ProcessRecord currentSlice = null;
         int currentSliceStart = time;
+        TraceRecorder trace = new TraceRecorder(processes);
+        Comparator<ProcessRecord> dispatchOrder = Comparator.comparingInt((ProcessRecord p) -> remainingTime.get(p))
+                .thenComparingInt(ProcessRecord::getArrivalTime)
+                .thenComparing(ProcessRecord::getId);
 
         while (completed < n) {
             final int currentTime = time;
             ProcessRecord chosen = processes.stream()
                     .filter(p -> p.getArrivalTime() <= currentTime && remainingTime.get(p) > 0)
-                    .min(Comparator.comparingInt((ProcessRecord p) -> remainingTime.get(p))
-                            .thenComparingInt(ProcessRecord::getArrivalTime)
-                            .thenComparing(ProcessRecord::getId))
+                    .min(dispatchOrder)
                     .orElse(null);
 
             if (chosen == null) {
@@ -51,6 +53,7 @@ public class SrtfScheduler implements CpuScheduler {
                         .mapToInt(ProcessRecord::getArrivalTime)
                         .filter(a -> a > currentTime)
                         .min().orElse(currentTime + 1);
+                trace.recordIdle(time, nextArrival);
                 gantt.add(new GanttSlice(null, time, nextArrival));
                 time = nextArrival;
                 currentSliceStart = time;
@@ -68,12 +71,20 @@ public class SrtfScheduler implements CpuScheduler {
                 currentSliceStart = time;
             }
 
+            boolean preempts = previous != null && previous != chosen && remainingTime.get(previous) > 0;
+            List<ProcessRecord> ready = processes.stream()
+                    .filter(p -> p != chosen && p.getArrivalTime() <= currentTime && remainingTime.get(p) > 0)
+                    .sorted(dispatchOrder)
+                    .toList();
+            trace.record(time, chosen, remainingTime.get(chosen), ready, remainingTime::get, preempts ? previous : null);
+
             remainingTime.put(chosen, remainingTime.get(chosen) - 1);
             time++;
             previous = chosen;
 
             if (remainingTime.get(chosen) == 0) {
                 completionTime.put(chosen, time);
+                trace.complete(chosen, time);
                 completed++;
             }
         }
@@ -90,6 +101,6 @@ public class SrtfScheduler implements CpuScheduler {
             metrics.add(new ProcessMetrics(p.getId(), p.getArrivalTime(), p.getBurstTime(), completion, turnaround, waiting));
         }
 
-        return SchedulingResultFactory.build(gantt, metrics, contextSwitches);
+        return SchedulingResultFactory.build(gantt, metrics, contextSwitches, trace.finish(time));
     }
 }

@@ -16,6 +16,7 @@ public class FcfsScheduler implements CpuScheduler {
         List<ProcessRecord> order = processes.stream()
                 .sorted(Comparator.comparingInt(ProcessRecord::getArrivalTime).thenComparing(ProcessRecord::getId))
                 .toList();
+        TraceRecorder trace = new TraceRecorder(processes);
 
         List<GanttSlice> gantt = new ArrayList<>();
         List<ProcessMetrics> metrics = new ArrayList<>();
@@ -23,8 +24,10 @@ public class FcfsScheduler implements CpuScheduler {
         int contextSwitches = 0;
         String previousProcessId = null;
 
-        for (ProcessRecord process : order) {
+        for (int index = 0; index < order.size(); index++) {
+            ProcessRecord process = order.get(index);
             if (time < process.getArrivalTime()) {
+                trace.recordIdle(time, process.getArrivalTime());
                 gantt.add(new GanttSlice(null, time, process.getArrivalTime()));
                 time = process.getArrivalTime();
             }
@@ -35,6 +38,13 @@ public class FcfsScheduler implements CpuScheduler {
             int start = time;
             int end = start + process.getBurstTime();
             gantt.add(new GanttSlice(process.getId(), start, end));
+            List<ProcessRecord> notYetStarted = order.subList(index + 1, order.size());
+            for (int t = start; t < end; t++) {
+                final int tick = t;
+                List<ProcessRecord> ready = notYetStarted.stream().filter(p -> p.getArrivalTime() <= tick).toList();
+                trace.record(t, process, end - t, ready, TraceRecorder.fullBurst(), null);
+            }
+            trace.complete(process, end);
             time = end;
             previousProcessId = process.getId();
 
@@ -43,6 +53,6 @@ public class FcfsScheduler implements CpuScheduler {
             metrics.add(new ProcessMetrics(process.getId(), process.getArrivalTime(), process.getBurstTime(), end, turnaround, waiting));
         }
 
-        return SchedulingResultFactory.build(gantt, metrics, contextSwitches);
+        return SchedulingResultFactory.build(gantt, metrics, contextSwitches, trace.finish(time));
     }
 }

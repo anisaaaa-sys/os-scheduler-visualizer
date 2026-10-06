@@ -7,6 +7,7 @@ public record SchedulingResult(
         List<ProcessMetrics> processMetrics,
         double averageWaitingTime,
         double averageTurnaroundTime,
-        int contextSwitches
+        int contextSwitches,
+        List<TraceStep> trace
 ) {
 }
