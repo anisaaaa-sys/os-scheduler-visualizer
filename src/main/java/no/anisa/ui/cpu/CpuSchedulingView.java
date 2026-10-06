@@ -48,9 +48,10 @@ public class CpuSchedulingView extends VerticalLayout {
     private final ComboBox<SchedulingAlgorithmType> algorithmSelect = new ComboBox<>("Algorithm");
     private final IntegerField quantumField = new IntegerField("Time quantum");
 
-    private final GanttChart ganttChart = new GanttChart();
+    private final TracePlayer tracePlayer = new TracePlayer();
     private final Grid<ProcessMetrics> resultsGrid = new Grid<>(ProcessMetrics.class, false);
     private final Span averagesLabel = new Span();
+    private final VerticalLayout resultsSection = new VerticalLayout();
 
     public CpuSchedulingView() {
         setSizeFull();
@@ -62,10 +63,11 @@ public class CpuSchedulingView extends VerticalLayout {
         add(buildControls());
 
         add(new H3("Gantt Chart"));
-        add(ganttChart);
+        add(tracePlayer);
 
-        add(new H3("Results"));
         add(buildResultsSection());
+        resultsSection.setVisible(false);
+        tracePlayer.addEndReachedListener(() -> resultsSection.setVisible(true));
 
         loadExample();
     }
@@ -86,6 +88,11 @@ public class CpuSchedulingView extends VerticalLayout {
         Binder<ProcessRecord> binder = new Binder<>(ProcessRecord.class);
         Editor<ProcessRecord> editor = processGrid.getEditor();
         editor.setBinder(binder);
+        binder.addValueChangeListener(event -> {
+            if (event.isFromClient()) {
+                tracePlayer.stop();
+            }
+        });
 
         Grid.Column<ProcessRecord> idColumn = processGrid.addColumn(ProcessRecord::getId).setHeader("ID").setAutoWidth(true);
         TextField idField = new TextField();
@@ -118,6 +125,7 @@ public class CpuSchedulingView extends VerticalLayout {
             Button deleteButton = new Button(VaadinIcon.TRASH.create());
             deleteButton.addThemeVariants(ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_ERROR);
             deleteButton.addClickListener(_ -> {
+                tracePlayer.stop();
                 processes.remove(process);
                 processGrid.getDataProvider().refreshAll();
             });
@@ -141,8 +149,11 @@ public class CpuSchedulingView extends VerticalLayout {
         quantumField.setValue(4);
         quantumField.setMin(1);
         quantumField.setVisible(false);
-        algorithmSelect.addValueChangeListener(event ->
-                quantumField.setVisible(event.getValue() == SchedulingAlgorithmType.ROUND_ROBIN));
+        algorithmSelect.addValueChangeListener(event -> {
+            quantumField.setVisible(event.getValue() == SchedulingAlgorithmType.ROUND_ROBIN);
+            tracePlayer.stop();
+        });
+        quantumField.addValueChangeListener(_ -> tracePlayer.stop());
 
         Button runButton = new Button("Run", _ -> runSimulation());
         runButton.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
@@ -162,10 +173,10 @@ public class CpuSchedulingView extends VerticalLayout {
         resultsGrid.setAllRowsVisible(true);
         resultsGrid.setWidthFull();
 
-        VerticalLayout layout = new VerticalLayout(resultsGrid, averagesLabel);
-        layout.setPadding(false);
-        layout.setSpacing(true);
-        return layout;
+        resultsSection.add(new H3("Results"), resultsGrid, averagesLabel);
+        resultsSection.setPadding(false);
+        resultsSection.setSpacing(true);
+        return resultsSection;
     }
 
     /**
@@ -181,6 +192,7 @@ public class CpuSchedulingView extends VerticalLayout {
     }
 
     private void addBlankProcess() {
+        tracePlayer.stop();
         int nextIndex = processes.size() + 1;
         while (hasProcessWithId("P" + nextIndex)) {
             nextIndex++;
@@ -190,6 +202,7 @@ public class CpuSchedulingView extends VerticalLayout {
     }
 
     private void loadExample() {
+        tracePlayer.stop();
         processes.clear();
         processes.addAll(ExampleDataset.classicFiveProcesses());
         processGrid.getDataProvider().refreshAll();
@@ -216,11 +229,13 @@ public class CpuSchedulingView extends VerticalLayout {
 
         SchedulingResult result = CpuSchedulerFactory.run(type, List.copyOf(processes), quantum);
 
-        ganttChart.setSlices(result.ganttChart());
+        // Results stay hidden until playback reaches the end (or the user skips to it).
+        resultsSection.setVisible(false);
         resultsGrid.setItems(result.processMetrics());
         averagesLabel.setText(String.format(
                 "Average waiting time: %.2f | Average turnaround time: %.2f | Context switches: %d",
                 result.averageWaitingTime(), result.averageTurnaroundTime(), result.contextSwitches()));
+        tracePlayer.play(result);
     }
 
     private boolean hasProcessWithId(String id) {

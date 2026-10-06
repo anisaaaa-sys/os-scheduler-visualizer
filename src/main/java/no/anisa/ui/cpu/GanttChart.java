@@ -14,9 +14,31 @@ public class GanttChart extends Div {
             "#14b8a6", "#eab308", "#ec4899", "#6366f1", "#84cc16"
     };
 
+    private final Div cursor = new Div();
+    private final Div dimOverlay = new Div();
+    private int chartStart;
+    private int chartDuration;
+
     public GanttChart() {
         addClassName("gantt-chart");
         getStyle().set("display", "flex").set("flex-direction", "column").set("gap", "4px").set("width", "100%");
+
+        cursor.getStyle()
+                .set("position", "absolute")
+                .set("top", "-4px")
+                .set("bottom", "-4px")
+                .set("width", "2px")
+                .set("transform", "translateX(-1px)")
+                .set("background", "var(--lumo-primary-color)")
+                .set("pointer-events", "none");
+        dimOverlay.getStyle()
+                .set("position", "absolute")
+                .set("top", "0")
+                .set("bottom", "0")
+                .set("right", "0")
+                .set("background", "var(--lumo-base-color)")
+                .set("opacity", "0.6")
+                .set("pointer-events", "none");
     }
 
     public void setSlices(List<GanttSlice> slices) {
@@ -37,6 +59,8 @@ public class GanttChart extends Div {
                 .set("color", "var(--lumo-secondary-text-color)");
 
         int totalDuration = slices.get(slices.size() - 1).end() - slices.get(0).start();
+        chartStart = slices.get(0).start();
+        chartDuration = totalDuration;
 
         double offset = 0;
         for (GanttSlice slice : slices) {
@@ -61,7 +85,26 @@ public class GanttChart extends Div {
         }
         markers.add(marker(slices.get(slices.size() - 1).end(), 100, "-100%"));
 
-        add(bar, markers);
+        // The cursor and overlay sit on top of the bar, so the bar's own overflow clipping doesn't hide them.
+        Div track = new Div(bar, dimOverlay, cursor);
+        track.getStyle().set("position", "relative").set("width", "100%");
+        add(track, markers);
+        setCursor(null);
+    }
+
+    /**
+     * Shows a vertical cursor at {@code time} and dims everything to its right, or hides both when
+     * {@code time} is {@code null}.
+     */
+    public void setCursor(Integer time) {
+        boolean visible = time != null && chartDuration > 0;
+        cursor.setVisible(visible);
+        dimOverlay.setVisible(visible);
+        if (visible) {
+            double percent = Math.clamp(100.0 * (time - chartStart) / chartDuration, 0, 100);
+            cursor.getStyle().set("left", percent + "%");
+            dimOverlay.getStyle().set("left", percent + "%");
+        }
     }
 
     /** Places a time label at {@code leftPercent} of the chart width, shifted by {@code translateX} to align it to the boundary. */
