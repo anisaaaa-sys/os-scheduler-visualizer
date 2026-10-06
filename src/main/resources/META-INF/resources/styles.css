@@ -1,1 +1,7 @@
 /* Add your styles here */
+
+/* Page Replacement comparison: rows with the fewest page faults */
+vaadin-grid::part(fewest-faults) {
+    background: var(--lumo-success-color-10pct);
+    font-weight: 600;
+}
