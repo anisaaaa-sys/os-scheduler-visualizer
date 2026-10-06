@@ -15,6 +15,7 @@ import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.component.textfield.TextField;
+import com.vaadin.flow.data.renderer.TextRenderer;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 
@@ -26,6 +27,7 @@ import no.anisa.ui.MainLayout;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
 @Route(value = "page-replacement", layout = MainLayout.class)
 @PageTitle("Page Replacement | OS Scheduler Visualizer")
@@ -69,8 +71,15 @@ public class PageReplacementView extends VerticalLayout {
         framesField.setMax(MAX_FRAMES);
         framesField.setStepButtonsVisible(true);
 
-        algorithmSelect.setItems(PageReplacementAlgorithmType.values());
-        algorithmSelect.setItemLabelGenerator(PageReplacementAlgorithmType::getLabel);
+        // Short name in the field, full name in the dropdown; typing matches either.
+        algorithmSelect.setItems((type, filter) -> {
+            String needle = filter.toLowerCase(Locale.ROOT);
+            return type.getShortLabel().toLowerCase(Locale.ROOT).contains(needle)
+                    || type.getLabel().toLowerCase(Locale.ROOT).contains(needle);
+        }, PageReplacementAlgorithmType.values());
+        algorithmSelect.setItemLabelGenerator(PageReplacementAlgorithmType::getShortLabel);
+        algorithmSelect.setRenderer(new TextRenderer<>(PageReplacementAlgorithmType::getLabel));
+        algorithmSelect.getStyle().set("--vaadin-combo-box-overlay-width", "17rem");
         algorithmSelect.setValue(PageReplacementAlgorithmType.FIFO);
 
         Button runButton = new Button("Run", _ -> runSimulation());

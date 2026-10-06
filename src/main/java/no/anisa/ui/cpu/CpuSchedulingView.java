@@ -19,6 +19,7 @@ import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.data.binder.Binder;
 import com.vaadin.flow.data.binder.Setter;
+import com.vaadin.flow.data.renderer.TextRenderer;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouteAlias;
@@ -34,6 +35,7 @@ import no.anisa.ui.MainLayout;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.function.ObjIntConsumer;
 
@@ -142,8 +144,15 @@ public class CpuSchedulingView extends VerticalLayout {
     }
 
     private Component buildControls() {
-        algorithmSelect.setItems(SchedulingAlgorithmType.values());
-        algorithmSelect.setItemLabelGenerator(SchedulingAlgorithmType::getLabel);
+        // Short name in the field, full name in the dropdown; typing matches either.
+        algorithmSelect.setItems((type, filter) -> {
+            String needle = filter.toLowerCase(Locale.ROOT);
+            return type.getShortLabel().toLowerCase(Locale.ROOT).contains(needle)
+                    || type.getLabel().toLowerCase(Locale.ROOT).contains(needle);
+        }, SchedulingAlgorithmType.values());
+        algorithmSelect.setItemLabelGenerator(SchedulingAlgorithmType::getShortLabel);
+        algorithmSelect.setRenderer(new TextRenderer<>(SchedulingAlgorithmType::getLabel));
+        algorithmSelect.getStyle().set("--vaadin-combo-box-overlay-width", "26rem");
         algorithmSelect.setValue(SchedulingAlgorithmType.FCFS);
 
         quantumField.setValue(4);
