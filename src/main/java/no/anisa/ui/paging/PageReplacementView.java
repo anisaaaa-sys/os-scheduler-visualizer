@@ -57,8 +57,6 @@ public class PageReplacementView extends VerticalLayout {
         add(comparisonHeading, buildComparisonGrid());
         comparisonHeading.setVisible(false);
         comparisonGrid.setVisible(false);
-
-        runSimulation();
     }
 
     private Component buildControls() {

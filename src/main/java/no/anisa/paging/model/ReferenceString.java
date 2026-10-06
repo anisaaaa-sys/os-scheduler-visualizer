@@ -5,7 +5,8 @@ import java.util.List;
 
 public final class ReferenceString {
 
-    public static final String EXAMPLE = "7 0 1 2 0 3 0 4 2 3 0 3 2";
+    /** The classic 20-reference textbook string, pre-filled in the Page Replacement view. */
+    public static final String EXAMPLE = "7 0 1 2 0 3 0 4 2 3 0 3 2 1 2 0 1 7 0 1";
 
     private ReferenceString() {
     }
