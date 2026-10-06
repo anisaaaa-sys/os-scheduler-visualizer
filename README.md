@@ -1,6 +1,6 @@
 # My Application README
 
-- [ ] TODO Replace or update this README with instructions relevant to your application
+- [ ] TODO Replace or update this README with relevant instructions
 
 To start the application in development mode, import it into your IDE and run the `Application` class. 
 You can also start the application from the command line by running: 
