@@ -27,6 +27,10 @@ Built with Vaadin and Spring Boot.
 
 ![Page replacement view](docs/page-replacement.png)
 
+### General
+- **Light and dark mode:** toggle with the moon icon in the header.
+- **Example data on load:** both views open with a textbook example, ready to run.
+
 ## Conventions
 
 - **Priority:** a lower number means a higher priority.
