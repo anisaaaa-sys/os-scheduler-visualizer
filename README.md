@@ -16,7 +16,9 @@ Built with Vaadin and Spring Boot.
 - **Per-process metrics:** completion, turnaround and waiting time, plus averages and context switches.
 - **Compare all:** runs every algorithm on the same workload and highlights the best value in each column.
 
-![CPU scheduling view](docs/cpu-scheduling.png)
+![CPU scheduling view with SRTF](docs/cpu-scheduling.png)
+
+![Comparison of all CPU scheduling algorithms](docs/cpu-comparison.png)
 
 ### Page replacement
 - **Three algorithms:** FIFO, LRU and Optimal.
