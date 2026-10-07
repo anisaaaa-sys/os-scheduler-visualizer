@@ -128,7 +128,7 @@ public class PageReplacementView extends VerticalLayout {
 
         // Highlight every algorithm that ties for the fewest faults.
         int fewestFaults = rows.stream().mapToInt(row -> row.result().pageFaults()).min().orElse(0);
-        comparisonGrid.setPartNameGenerator(row -> row.result().pageFaults() == fewestFaults ? "fewest-faults" : null);
+        comparisonGrid.setPartNameGenerator(row -> row.result().pageFaults() == fewestFaults ? "best-value" : null);
         comparisonGrid.setItems(rows);
         comparisonHeading.setVisible(true);
         comparisonGrid.setVisible(true);

@@ -24,6 +24,7 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouteAlias;
 
+import no.anisa.scheduling.algorithm.AlgorithmComparison;
 import no.anisa.scheduling.algorithm.CpuSchedulerFactory;
 import no.anisa.scheduling.algorithm.SchedulingAlgorithmType;
 import no.anisa.scheduling.model.ExampleDataset;
@@ -38,6 +39,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.function.ObjIntConsumer;
+import java.util.function.Predicate;
 
 @Route(value = "cpu-scheduling", layout = MainLayout.class)
 @RouteAlias(value = "", layout = MainLayout.class)
@@ -54,6 +56,9 @@ public class CpuSchedulingView extends VerticalLayout {
     private final Grid<ProcessMetrics> resultsGrid = new Grid<>(ProcessMetrics.class, false);
     private final Span averagesLabel = new Span();
     private final VerticalLayout resultsSection = new VerticalLayout();
+    private final Grid<AlgorithmComparison.Entry> comparisonGrid = new Grid<>(AlgorithmComparison.Entry.class, false);
+    private final VerticalLayout comparisonSection = new VerticalLayout();
+    private AlgorithmComparison comparison;
 
     public CpuSchedulingView() {
         setSizeFull();
@@ -70,6 +75,9 @@ public class CpuSchedulingView extends VerticalLayout {
         add(buildResultsSection());
         resultsSection.setVisible(false);
         tracePlayer.addEndReachedListener(() -> resultsSection.setVisible(true));
+
+        add(buildComparisonSection());
+        comparisonSection.setVisible(false);
 
         loadExample();
     }
@@ -167,7 +175,9 @@ public class CpuSchedulingView extends VerticalLayout {
         Button runButton = new Button("Run", _ -> runSimulation());
         runButton.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
 
-        HorizontalLayout controls = new HorizontalLayout(algorithmSelect, quantumField, runButton);
+        Button compareButton = new Button("Compare all", _ -> compareAll());
+
+        HorizontalLayout controls = new HorizontalLayout(algorithmSelect, quantumField, runButton, compareButton);
         controls.setAlignItems(FlexComponent.Alignment.END);
         return controls;
     }
@@ -186,6 +196,30 @@ public class CpuSchedulingView extends VerticalLayout {
         resultsSection.setPadding(false);
         resultsSection.setSpacing(true);
         return resultsSection;
+    }
+
+    private Component buildComparisonSection() {
+        comparisonGrid.addColumn(entry -> entry.type().getLabel()).setHeader("Algorithm").setAutoWidth(true);
+        // Each metric column marks its own best cell(s) with the shared "best-value" style.
+        comparisonGrid.addColumn(entry -> String.format("%.2f", entry.averageWaitingTime()))
+                .setHeader("Avg waiting")
+                .setPartNameGenerator(entry -> bestPart(comparison -> comparison.hasBestWaitingTime(entry)));
+        comparisonGrid.addColumn(entry -> String.format("%.2f", entry.averageTurnaroundTime()))
+                .setHeader("Avg turnaround")
+                .setPartNameGenerator(entry -> bestPart(comparison -> comparison.hasBestTurnaroundTime(entry)));
+        comparisonGrid.addColumn(AlgorithmComparison.Entry::contextSwitches)
+                .setHeader("Context switches")
+                .setPartNameGenerator(entry -> bestPart(comparison -> comparison.hasFewestContextSwitches(entry)));
+        comparisonGrid.setAllRowsVisible(true);
+        comparisonGrid.setWidthFull();
+
+        comparisonSection.add(new H3("Algorithm Comparison"), comparisonGrid);
+        comparisonSection.setPadding(false);
+        return comparisonSection;
+    }
+
+    private String bestPart(Predicate<AlgorithmComparison> isBest) {
+        return comparison != null && isBest.test(comparison) ? "best-value" : null;
     }
 
     /**
@@ -217,16 +251,37 @@ public class CpuSchedulingView extends VerticalLayout {
         processGrid.getDataProvider().refreshAll();
     }
 
-    private void runSimulation() {
+    /** Shows an error notification and returns {@code false} if the process set can't be scheduled. */
+    private boolean validateProcesses() {
         if (processes.isEmpty()) {
             Notification.show("Add at least one process first").addThemeVariants(NotificationVariant.LUMO_ERROR);
-            return;
+            return false;
         }
 
         String duplicateId = findDuplicateId();
         if (duplicateId != null) {
             Notification.show("Process IDs must be unique: " + duplicateId + " is used more than once")
                     .addThemeVariants(NotificationVariant.LUMO_ERROR);
+            return false;
+        }
+        return true;
+    }
+
+    private int currentQuantum() {
+        return quantumField.getValue() == null ? 1 : quantumField.getValue();
+    }
+
+    private void compareAll() {
+        if (!validateProcesses()) {
+            return;
+        }
+        comparison = AlgorithmComparison.of(List.copyOf(processes), currentQuantum());
+        comparisonGrid.setItems(comparison.entries());
+        comparisonSection.setVisible(true);
+    }
+
+    private void runSimulation() {
+        if (!validateProcesses()) {
             return;
         }
         if (algorithmSelect.getValue() == null) {
@@ -234,9 +289,7 @@ public class CpuSchedulingView extends VerticalLayout {
         }
 
         SchedulingAlgorithmType type = algorithmSelect.getValue();
-        int quantum = quantumField.getValue() == null ? 1 : quantumField.getValue();
-
-        SchedulingResult result = CpuSchedulerFactory.run(type, List.copyOf(processes), quantum);
+        SchedulingResult result = CpuSchedulerFactory.run(type, List.copyOf(processes), currentQuantum());
 
         // Results stay hidden until playback reaches the end (or the user skips to it).
         resultsSection.setVisible(false);
